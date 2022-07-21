@@ -4,6 +4,7 @@ import com.example.demo.dto.BookDto;
 import com.example.demo.dto.SearchDto;
 import com.example.demo.dto.SearchResponseDto;
 import com.example.demo.service.BookService;
+import org.apache.solr.client.solrj.response.SuggesterResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
@@ -42,5 +43,10 @@ public class BookController {
 										 @RequestParam(defaultValue = "0") int page,
 										 @RequestParam(defaultValue = "10") int size) {
 		return bookService.findByQuery(searchDto, PageRequest.of(page, size));
+	}
+
+	@GetMapping("/suggest")
+	public SuggesterResponse suggest(@RequestParam String query) {
+		return bookService.suggest(query);
 	}
 }

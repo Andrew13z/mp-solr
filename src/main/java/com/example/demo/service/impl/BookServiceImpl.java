@@ -8,6 +8,8 @@ import com.example.demo.mapper.BookMapper;
 import com.example.demo.mapper.SearchMapper;
 import com.example.demo.repository.BookRepository;
 import com.example.demo.service.BookService;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.response.SuggesterResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,12 +66,14 @@ public class BookServiceImpl implements BookService {
 		LOGGER.info("All books are saved.");
 	}
 
+	@Override
 	public BookDto findById(String id) {
 		var book = bookRepository.findById(id)
 				.orElseThrow(() -> new NoSuchElementException("Book not found by id: " + id));
 		return bookMapper.entityToDto(book);
 	}
 
+	@Override
 	public SearchResponseDto findByQuery(SearchDto searchDto, Pageable pageable) {
 		var criteria = createCriteria(searchDto);
 		var query = createQuery(criteria, pageable, searchDto.getFacetField());
@@ -99,5 +103,17 @@ public class BookServiceImpl implements BookService {
 		}
 		var result = solrTemplate.queryForPage(BOOK_COLLECTION_NAME, query, BookDto.class);
 		return searchMapper.toSearchDto(result);
+	}
+
+	@Override
+	public SuggesterResponse suggest(String query) {
+		var q = new SolrQuery();
+
+		q.setRequestHandler("/suggest");
+		q.setParam("suggest.q", query);
+		q.setParam("suggest", "true");
+
+		var queryResponse = solrTemplate.execute(solrClient -> solrClient.query(BOOK_COLLECTION_NAME, q));
+		return queryResponse.getSuggesterResponse();
 	}
 }
