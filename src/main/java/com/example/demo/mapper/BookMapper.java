@@ -26,10 +26,4 @@ public class BookMapper {
 		return new BookDto(bookEntity.getId(), bookEntity.getTitle(), bookEntity.getAuthors(),
 				bookEntity.getContent(), bookEntity.getLanguage());
 	}
-
-	public List<BookDto> entityToDto(List<Book> bookEntities) {
-		return bookEntities.stream()
-				.map(this::entityToDto)
-				.collect(Collectors.toList());
-	}
 }

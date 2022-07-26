@@ -68,22 +68,22 @@ public class EpubExtractor {
 				.map(Author::toString)
 				.collect(Collectors.toList());
 
-		var content = getContent(book);
+		var content = getText(book);
 
 		var language = book.getMetadata().getLanguage();
 
 		return new EpubBook(id, title, authors, content, language);
 	}
 
-	private String getContent(Book book) {
+	private String getText(Book book) {
 		var spine = new Spine(book.getTableOfContents());
 		return spine.getSpineReferences().stream()
 				.map(SpineReference::getResource)
-				.map(this::getContent)
+				.map(this::getText)
 				.collect(Collectors.joining());
 	}
 
-	private String getContent(nl.siegmann.epublib.domain.Resource resource) {
+	private String getText(nl.siegmann.epublib.domain.Resource resource) {
 		try (var reader = new BufferedReader(new InputStreamReader(resource.getInputStream()))) {
 			return reader.lines()
 					.map(line -> Jsoup.parse(line).body().text())

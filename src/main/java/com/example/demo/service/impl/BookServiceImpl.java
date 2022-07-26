@@ -97,12 +97,16 @@ public class BookServiceImpl implements BookService {
 
 	private SearchResponseDto executeQuery(Query query, String facetField) {
 		if (facetField != null) {
-			var result =
-					solrTemplate.queryForFacetPage(BOOK_COLLECTION_NAME, (FacetQuery) query, BookDto.class);
-			return searchMapper.toSearchDto(result, facetField);
+			return executeFacetQuery((FacetQuery) query, facetField);
 		}
 		var result = solrTemplate.queryForPage(BOOK_COLLECTION_NAME, query, BookDto.class);
 		return searchMapper.toSearchDto(result);
+	}
+
+	private SearchResponseDto executeFacetQuery (FacetQuery query, String facetField) {
+		var result =
+				solrTemplate.queryForFacetPage(BOOK_COLLECTION_NAME, query, BookDto.class);
+		return searchMapper.toSearchDto(result, facetField);
 	}
 
 	@Override
