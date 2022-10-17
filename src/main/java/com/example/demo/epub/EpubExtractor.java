@@ -2,6 +2,7 @@ package com.example.demo.epub;
 
 import nl.siegmann.epublib.domain.Author;
 import nl.siegmann.epublib.domain.Book;
+import nl.siegmann.epublib.domain.Identifier;
 import nl.siegmann.epublib.domain.Spine;
 import nl.siegmann.epublib.domain.SpineReference;
 import nl.siegmann.epublib.epub.EpubReader;
@@ -9,64 +10,67 @@ import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.function.Predicate.not;
+import static java.util.stream.Collectors.toList;
 
 @Component
 public class EpubExtractor {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(EpubExtractor.class);
 	private final EpubReader epubReader;
-	private final ResourcePatternResolver resourcePatternResolver;
 
 	@Autowired
-	public EpubExtractor(EpubReader epubReader, ResourcePatternResolver resourcePatternResolver) {
+	public EpubExtractor(EpubReader epubReader) {
 		this.epubReader = epubReader;
-		this.resourcePatternResolver = resourcePatternResolver;
 	}
 
 	public List<EpubBook> getAllBooksFromFolder(String location) {
-		var epubBooks = new ArrayList<EpubBook>();
-		try {
-			var resources = resourcePatternResolver.getResources(location);
-			for (var resource : resources) {
-				try (var inputStream = resource.getInputStream()) {
-					var book = epubReader.readEpub(inputStream);
-					epubBooks.add(toEpubBook(book, resource));
-				}
-			}
-		} catch (IOException e) {
-			LOGGER.error("Error while reading books from {}", location);
-			throw new EpubException(e);
-		}
-		LOGGER.info("Successfully read {} books from {}.", epubBooks.size(), location);
-		return epubBooks;
+        try (Stream<Path> paths = Files.walk(Paths.get(location))) {
+            return paths
+                .filter(((Predicate<Path>) Files::isRegularFile).and(path -> path.toString().toLowerCase().endsWith(".epub")))
+				.map(this::readEpub)
+				.flatMap(Optional::stream)
+				.map(this::toEpubBook)
+				.collect(toList());
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot read files from " + location, e);
+        }
 	}
 
-	private EpubBook toEpubBook(Book book, Resource resource) {
-		var id = Optional.ofNullable(resource.getFilename())
-				.map(name -> name.replace(".epub", ""))
-				.orElseGet(() -> UUID.randomUUID().toString().substring(0, 5));
+    private Optional<Book> readEpub(Path path){
+        try (var book = Files.newInputStream(path)){
+            return Optional.ofNullable(epubReader.readEpub(book));
+        } catch (IOException e) {
+            LOGGER.error("Error while reading book {}", path.getFileName());
+		}
+        return Optional.empty();
+	}
+
+	private EpubBook toEpubBook(Book book) {
+        var id = getId(book.getMetadata().getIdentifiers());
 
 		var title = book.getTitle();
 
-		LOGGER.trace("Working on book with id '{}' and title '{}'", id, title);
+		LOGGER.info("Working on book with id '{}' and title '{}'", id, title);
 
 		var authors = book.getMetadata().getAuthors().stream()
 				.map(Author::toString)
-				.collect(Collectors.toList());
+				.collect(toList());
 
 		var content = getText(book);
 
@@ -82,6 +86,15 @@ public class EpubExtractor {
 				.map(this::getText)
 				.collect(Collectors.joining());
 	}
+
+    private String getId (List<Identifier> identifiers) {
+		return identifiers.stream()
+			.filter(i -> i.getScheme().equals("URI"))
+			.findFirst()
+			.map(Identifier::getValue)
+            .map(s -> s.substring(s.lastIndexOf("/") + 1))
+			.orElseGet(() -> UUID.randomUUID().toString().substring(0, 5));
+    }
 
 	private String getText(nl.siegmann.epublib.domain.Resource resource) {
 		try (var reader = new BufferedReader(new InputStreamReader(resource.getInputStream()))) {
